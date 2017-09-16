@@ -10,14 +10,13 @@ from ._utils import route
 blueprint = Blueprint('root', __name__)
 
 
-@blueprint.route("/api")
+@blueprint.route("/api/")
 def get():
     """Generate memes from templates."""
     data = OrderedDict()
     data['templates'] = route('templates.get', _external=True)
     data['fonts'] = route('fonts.get', _external=True)
     data['aliases'] = route('aliases.get', _external=True)
-    data['magic'] = route('magic.get', _external=True)
     data['search'] = route('search.get', _external=True)
     data['version'] = __version__
     data['changes'] = current_app.config['CHANGES_URL']

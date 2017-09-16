@@ -17,9 +17,12 @@ class ImageService(Service):
         self.image_store = image_store
 
     def create(self, template, text, font=None, **options):
-        font = font or self.font_store.find(Font.DEFAULT)
-
-        image = Image(template, text, font=font, **options)
+        image = Image(
+            template, text,
+            font=font or self.font_store.find(Font.DEFAULT),
+            watermark_font=self.font_store.find(Font.DEFAULT),
+            **options,
+        )
 
         try:
             self.image_store.create(image)
@@ -28,9 +31,9 @@ class ImageService(Service):
                 exception = self.exceptions.FilenameTooLong
             elif "image file" in str(exception):
                 exception = self.exceptions.InvalidImageLink
-            raise exception from None  # pylint: disable=raising-bad-type
-        except SystemError as exception:
+            raise exception  # pylint: disable=raising-bad-type
+        except (ValueError, SystemError) as exception:
             log.warning(exception)
-            raise self.exceptions.InvalidImageLink from None
+            raise self.exceptions.InvalidImageLink
 
         return image

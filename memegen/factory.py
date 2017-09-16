@@ -1,11 +1,11 @@
 import os
 import logging
-from pathlib import Path
-from urllib.parse import urlencode, unquote
 
-from flask import request, current_app, url_for
+from flask import request, current_app
 from flask_api import FlaskAPI
 from flask_api.exceptions import APIException, NotFound
+import bugsnag
+from bugsnag.flask import handle_exceptions
 
 from . import extensions
 from . import services
@@ -38,23 +38,29 @@ def create_app(config):
     app = FlaskAPI(__name__)
     app.config.from_object(config)
 
+    configure_exceptions(app)
     configure_logging(app)
 
     register_extensions(app)
     register_services(app)
     register_blueprints(app)
 
-    enable_cache_busting(app)
-
     return app
 
 
+def configure_exceptions(app):
+    if app.config['BUGSNAG_API_KEY']:  # pragma: no cover
+        bugsnag.configure(
+            api_key=app.config['BUGSNAG_API_KEY'],
+            project_root=app.config['ROOT'],
+        )
+        handle_exceptions(app)
+
+
 def configure_logging(app):
-    if app.config['DEBUG']:
-        level = logging.DEBUG
-    else:
-        level = logging.INFO
-    logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
+    logging.basicConfig(level=app.config['LOG_LEVEL'],
+                        format="%(levelname)s: %(message)s")
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)
     logging.getLogger('yorm').setLevel(logging.WARNING)
     logging.getLogger('requests').setLevel(logging.WARNING)
     logging.getLogger('PIL').setLevel(logging.INFO)
@@ -62,6 +68,7 @@ def configure_logging(app):
 
 def register_extensions(app):
     extensions.cors.init_app(app, methods=['GET', 'OPTIONS'], allow_headers='*')
+    extensions.cache_control.init_app(app)
 
 
 def register_services(app):
@@ -100,15 +107,14 @@ def register_services(app):
         image_store=image_store,
     )
 
-    def log_request(response):
+    def log_request(response=None):
         if current_app.debug:
-            path = request.path
-            if request.args:
-                path += "?%s" % unquote(urlencode(request.args))
-            log.info("%s: %s - %i", request.method, path,
-                     response.status_code)
+            status = response.status_code if response else ''
+            log.info(f"{request.method}: {request.full_path} - {status}")
+
         return response
 
+    app.before_request(log_request)
     app.after_request(log_request)
 
 
@@ -117,26 +123,12 @@ def register_blueprints(app):
     app.register_blueprint(routes.api_fonts.blueprint)
     app.register_blueprint(routes.api_legacy.blueprint)
     app.register_blueprint(routes.api_links.blueprint)
-    app.register_blueprint(routes.api_magic.blueprint)
     app.register_blueprint(routes.api_root.blueprint)
     app.register_blueprint(routes.api_search.blueprint)
     app.register_blueprint(routes.api_templates.blueprint)
     app.register_blueprint(routes.custom.blueprint)
+    app.register_blueprint(routes.examples.blueprint)
     app.register_blueprint(routes.image.blueprint)
     app.register_blueprint(routes.index.blueprint)
     app.register_blueprint(routes.latest.blueprint)
-    app.register_blueprint(routes.magic.blueprint)
     app.register_blueprint(routes.static.blueprint)
-
-
-def enable_cache_busting(app):
-
-    def dated_url_for(endpoint, **values):
-        if endpoint == 'static':
-            filename = values.get('filename', None)
-            if filename:
-                path = Path(app.root_path, endpoint, filename)
-                values['q'] = int(path.stat().st_mtime)
-        return url_for(endpoint, **values)
-
-    app.context_processor(lambda: dict(url_for=dated_url_for))

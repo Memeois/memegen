@@ -1,10 +1,8 @@
 name: Member Berries
 link: http://knowyourmeme.com/memes/member-berries
 default:
-- "'MEMBER"
+- '''MEMBER'
 - STAR WARS?
 aliases:
 - member
 - member-berries
-regexes:
-- (?:re)?('?member)/?(.+)

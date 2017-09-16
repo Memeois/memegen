@@ -1,14 +1,20 @@
 {
   "name":"memegen",
-  "scripts":{},
   "env":{
+    "PIPENV_COLORBLIND" : {
+      "value": "true"
+    },
+    "PIPENV_NOSPIN" : {
+      "value": "true"
+    },
+    "HEROKU_APP_NAME": {
+      "required": "true"
+    },
+
+    "BUGSNAG_API_KEY": {
+      "required": true
+    },
     "FACEBOOK_APP_ID": {
-      "required": true
-    },
-    "FACEBOOK_IMAGE_HEIGHT": {
-      "required": true
-    },
-    "FACEBOOK_IMAGE_WIDTH": {
       "required": true
     },
     "FLASK_CONFIG": {
@@ -17,12 +23,7 @@
     "GOOGLE_ANALYTICS_TID": {
         "required": true
     },
-    "TWITTER_IMAGE_HEIGHT": {
-      "required": true
-    },
-    "TWITTER_IMAGE_WIDTH": {
-      "required": true
-    }
+    "WATERMARK_OPTIONS": "herokuapp.com,facebook.com,twitter.com"
   },
   "addons":[
     "papertrail"

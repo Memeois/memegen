@@ -1,6 +1,6 @@
 import logging
 
-from flask import Blueprint, current_app as app, redirect
+from flask import Blueprint, current_app, request, redirect
 from webargs import fields, flaskparser
 
 from .. import domain
@@ -21,6 +21,7 @@ OPTIONS = {
     'share': fields.Bool(missing=False),
     'width': fields.Int(missing=None),
     'height': fields.Int(missing=None),
+    'watermark': fields.Str(missing=None),
 }
 
 
@@ -31,9 +32,11 @@ def get_latest(index=1, filtered=True):
     cache = cache_filtered if filtered else cache_unfiltered
     kwargs = cache.get(index - 1)
 
-    if not kwargs:
+    if kwargs:
+        kwargs['preview'] = True
+    else:
         kwargs['key'] = 'custom'
-        kwargs['path'] = "your-meme/goes-here"
+        kwargs['path'] = "your_meme/goes_here"
         kwargs['alt'] = "https://raw.githubusercontent.com/jacebrowning/memegen/master/memegen/static/images/missing.png"
 
     return redirect(route('.get', _external=True, **kwargs))
@@ -45,7 +48,7 @@ def get_without_text(key, **options):
     options.pop('preview')
     options.pop('share')
 
-    template = app.template_service.find(key)
+    template = current_app.template_service.find(key)
     text = domain.Text(template.default_path)
 
     return redirect(route('.get', key=key, path=text.path, **options))
@@ -58,22 +61,28 @@ def get_without_text_jpeg(key):
 
 @blueprint.route("/<key>/<path:path>.jpg", endpoint='get')
 @flaskparser.use_kwargs(OPTIONS)
-def get_with_text(key, path, alt, font, preview, share, **size):
-    options = dict(key=key, path=path, alt=alt, font=font, **size)
+def get_with_text(key, path, alt, font, watermark, preview, share, **size):
+    assert len(size) == 2
+    options = dict(key=key, path=path,
+                   alt=alt, font=font, watermark=watermark, **size)
     if preview:
-        options['preview'] = 'true'
+        options['preview'] = True
     if share:
-        options['share'] = 'true'
+        options['share'] = True
 
     text = domain.Text(path)
-    fontfile = app.font_service.find(font)
+    fontfile = current_app.font_service.find(font)
 
-    template = app.template_service.find(key, allow_missing=True)
+    template = current_app.template_service.find(key, allow_missing=True)
     if template.key != key:
         options['key'] = template.key
         return redirect(route('.get', **options))
 
-    if alt and template.path == template.get_path(alt):
+    if path != text.path:
+        options['path'] = text.path
+        return redirect(route('.get', **options))
+
+    if alt and template.path == template.get_path(alt, download=False):
         options.pop('alt')
         return redirect(route('.get', **options))
 
@@ -81,12 +90,15 @@ def get_with_text(key, path, alt, font, preview, share, **size):
         options.pop('font')
         return redirect(route('.get', **options))
 
-    if path != text.path:
-        options['path'] = text.path
+    watermark, valid = _get_watermark(request, watermark)
+    if not valid:
+        options.pop('watermark')
         return redirect(route('.get', **options))
 
-    image = app.image_service.create(template, text,
-                                     style=alt, font=fontfile, size=size)
+    image = current_app.image_service.create(
+        template, text,
+        style=alt, font=fontfile, size=size, watermark=watermark,
+    )
 
     if not preview:
         cache_filtered.add(key=key, path=path, alt=alt, font=font)
@@ -102,13 +114,61 @@ def get_with_text_jpeg(key, path):
 
 
 @blueprint.route("/_<code>.jpg")
-def get_encoded(code):
+@flaskparser.use_kwargs(OPTIONS)
+def get_encoded(code, alt, font, watermark, preview, share, **size):
+    assert len(size) == 2
+    options = dict(code=code, font=font, watermark=watermark, **size)
+    if share:
+        options['share'] = True
 
-    key, path = app.link_service.decode(code)
-    template = app.template_service.find(key)
+    if alt or preview:
+        return redirect(route('.get_encoded', **options))
+
+    key, path = current_app.link_service.decode(code)
+    template = current_app.template_service.find(key)
     text = domain.Text(path)
-    image = app.image_service.create(template, text)
+    fontfile = current_app.font_service.find(font)
+
+    if font and not fontfile:
+        options.pop('font')
+        return redirect(route('.get_encoded', **options))
+
+    watermark, valid = _get_watermark(request, watermark)
+    if not valid:
+        options.pop('watermark')
+        return redirect(route('.get_encoded', **options))
+
+    image = current_app.image_service.create(
+        template, text, font=fontfile, size=size, watermark=watermark,
+    )
 
     track(image.text)
 
-    return display(image.text, image.path)
+    return display(image.text, image.path, share=share)
+
+
+def _get_watermark(_request, watermark):
+    referrer = _request.environ.get('HTTP_REFERER', "").lower()
+    agent = _request.environ.get('HTTP_USER_AGENT', "").lower()
+    log.debug("Referrer: %r, Agent: %r", referrer, agent)
+
+    if watermark == 'none':
+        for option in current_app.config['WATERMARK_OPTIONS']:
+            for identity in (referrer, agent):
+                if option and identity and option in identity:
+                    log.debug("Watermark disabled (%r in %r)", option, identity)
+                    return None, True
+        log.warning("Request does not support unmarked images")
+        return None, False
+
+    if watermark and watermark not in current_app.config['WATERMARK_OPTIONS']:
+        log.warning("Unsupported custom watermark: %r", watermark)
+        return watermark, False
+
+    if watermark:
+        log.debug("Using custom watermark: %r", watermark)
+        return watermark, True
+
+    default = current_app.config['WATERMARK_OPTIONS'][0]
+    log.debug("Using default watermark: %r", default)
+    return default, True

@@ -103,7 +103,7 @@ def describe_template():
         def is_placeholder_when_no_lines(template):
             template.lines = []
 
-            expect(template.sample_path) == "your-text/goes-here"
+            expect(template.sample_path) == "your_text/goes_here"
 
     def describe_keywords():
 
@@ -112,16 +112,6 @@ def describe_template():
 
             expect(template.keywords) == \
                 {'bar', 'the', 'day', 'in', 'abc', 'a', 'life'}
-
-    def describe_match():
-
-        def it_returns_none_when_no_match(template):
-            expect(template.match("")) == (0, None)
-
-        def it_returns_the_best_matching_result(template):
-            template.compile_regexes([r"(\w*)/?(abc)", r"(\w*)/?(def)"])
-
-            expect(template.match("_/def")) == (0.42, "_/def")
 
     def describe_search():
 
@@ -154,6 +144,10 @@ def describe_template():
 
     def describe_validate_link():
 
+        @pytest.fixture(autouse=True)
+        def enable_validation(monkeypatch):
+            monkeypatch.setenv('VALIDATE_LINKS', "true")
+
         def with_bad_link(template):
             mock_response = Mock()
             mock_response.status_code = 404
@@ -161,13 +155,13 @@ def describe_template():
             with patch('requests.head', Mock(return_value=mock_response)):
                 template.link = "example.com/fake"
 
-                expect(template.validate_link()) == False
+                expect(template.validate_link(delay=0)) == False
 
         @patch('pathlib.Path.is_file', Mock(return_value=True))
         def with_cached_valid_link(template):
             template.link = "already_cached_site.com"
 
-            expect(template.validate_link()) == True
+            expect(template.validate_link(delay=0)) == True
 
     def describe_validate_size():
 
@@ -184,13 +178,6 @@ def describe_template():
             mock_open.return_value = mock_img
 
             expect(template.validate_size()) == valid
-
-    def describe_validate_regexes():
-
-        def with_missing_split(template):
-            template.compile_regexes([".*"])
-
-            expect(template.validate_regexes()) == False
 
     def describe_validate():
 

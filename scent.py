@@ -22,12 +22,10 @@ class Options(object):
     rerun_args = None
 
     targets = [
-        (('make', 'test-unit', 'CI=true'), "Unit Tests", True),
-        (('make', 'test-int', 'CI=true'), "Integration Tests", False),
-        (('make', 'test-all'), "Combined Tests", False),
+        (('make', 'test-unit', 'DISABLE_COVERAGE=true'), "Unit Tests", True),
+        (('make', 'test-all'), "Integration Tests", False),
         (('make', 'check'), "Static Analysis", True),
         (('make', 'validate'), "Validate Templates", True),
-        (('make', 'doc'), None, True),
     ]
 
 

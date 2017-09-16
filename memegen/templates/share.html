@@ -1,7 +1,9 @@
 {% extends "layout.html" %}
+
 {% block title %}{{ title | safe }}{% endblock %}
-{% block meta %}
-{{- super() }}
+
+{% block meta -%}
+    <!-- Meta tags (shared image) -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@memegenlink" />
     <meta name="twitter:title" content="memegen.link" />
@@ -15,24 +17,29 @@
     <meta property="og:image:width" content="{{ config['FACEBOOK_IMAGE_WIDTH'] }}" />
     <meta property="og:image:height" content="{{ config['FACEBOOK_IMAGE_HEIGHT'] }}" />
     <meta property="og:description" content="{{ title | safe }}" />
-
 {%- endblock -%}
 
 {% block content %}
     <div class="container">
-      <div class="col-xs-12">
-        <div class="row">
-          <br>
+
+      <br>
+
+      <div class="row">
+        <div class="col-xs-12">
           <img class="center-block img-responsive" src="{{ img | safe }}" />
         </div>
-        <br>
-        <div class="row text-center">
-          <a class="btn btn-primary disable-link" href="https://www.facebook.com/sharer/sharer.php?u={{ url }}" target="_blank">
+      </div>
+
+      <br>
+
+      <div class="row">
+        <div class="col-xs-12 text-center">
+          <a class="btn btn-primary disable-link" href="https://www.facebook.com/sharer/sharer.php?u={{ url | urlencode }}" target="_blank">
               <img src="{{ url_for('static', filename='images/facebook.png') }}" height=20></img>
               &nbsp;
               Share on Facebook
           </a>
-          <a class="btn btn-primary disable-link" href="https://twitter.com/home?status={{ url }}" target="_blank">
+          <a class="btn btn-primary disable-link" href="https://twitter.com/home?status={{ url | urlencode }}" target="_blank">
               <img src="{{ url_for('static', filename='images/twitter.png') }}" height=20></img>
               &nbsp;
               Share on Twitter
@@ -44,6 +51,7 @@
           </button>
         </div>
       </div>
+
     </div>
 
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>

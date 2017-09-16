@@ -1,8 +1,8 @@
 import os
-import re
 import hashlib
 import shutil
 from pathlib import Path
+from contextlib import suppress
 import tempfile
 import logging
 
@@ -29,16 +29,14 @@ class Template:
     MIN_HEIGHT = 240
     MIN_WIDTH = 240
 
-    def __init__(self, key, name=None, lines=None, patterns=None,
-                 aliases=None, link=None, root=None):
+    def __init__(self, key, name=None, lines=None, aliases=None, link=None,
+                 root=None):
         self.key = key
         self.name = name or ""
         self.lines = lines or []
-        self.regexes = []
         self.aliases = aliases or []
         self.link = link or ""
         self.root = root or ""
-        self.compile_regexes(patterns or [])
 
     def __str__(self):
         return self.key
@@ -99,7 +97,7 @@ class Template:
     def keywords(self):
         words = set()
         for fields in [self.key, self.name] + self.aliases + self.lines:
-            for word in fields.lower().replace('-', ' ').split(' '):
+            for word in fields.lower().replace(Text.SPACE, ' ').split(' '):
                 if word:
                     words.add(word)
         return words
@@ -112,42 +110,28 @@ class Template:
                 text = text.replace(char, '')
         return text
 
-    def get_path(self, *styles):
-        for style in styles:
-            path = download_image(style)
-            if path:
-                return path
+    def get_path(self, style_or_url=None, *, download=True):
+        path = None
 
-        for name in (n.lower() for n in (*styles, self.DEFAULT) if n):
+        if style_or_url and '://' in style_or_url:
+            if download:
+                path = download_image(style_or_url)
+                if path is None:
+                    path = self._find_path_for_style(self.DEFAULT)
+
+        else:
+            names = [n.lower() for n in [style_or_url, self.DEFAULT] if n]
+            path = self._find_path_for_style(*names)
+
+        return path
+
+    def _find_path_for_style(self, *names):
+        for name in names:
             for extension in self.EXTENSIONS:
                 path = Path(self.dirpath, name + extension)
-                try:
+                with suppress(OSError):
                     if path.is_file():
                         return path
-                except OSError:
-                    continue
-
-        return None
-
-    def compile_regexes(self, patterns):
-        self.regexes = [re.compile(p, re.IGNORECASE) for p in patterns]
-
-    def match(self, pattern):
-        """Determine if a pattern matches this templates regexes."""
-        if self.regexes:
-            log.debug("Matching patterns in %s", self)
-
-        for regex in self.regexes:
-            log.debug("Comparing %r to %r", pattern, regex.pattern)
-            result = regex.match(pattern)
-            if result:
-                ratio = round(min(len(regex.pattern) / len(pattern),
-                                  len(pattern) / len(regex.pattern)), 2)
-                path = Text(result.group(1) + '/' + result.group(2)).path
-                log.debug("Matched: %r", ratio)
-                return ratio, path
-
-        return 0, None
 
     def search(self, query):
         """Count the number of times a query exists in relevant fields."""
@@ -167,7 +151,6 @@ class Template:
                 self.validate_meta,
                 self.validate_link,
                 self.validate_size,
-                self.validate_regexes,
             ]
         for validator in validators:
             if not validator():
@@ -189,7 +172,10 @@ class Template:
             return False
         return True
 
-    def validate_link(self):
+    def validate_link(self, delay=3):
+        if not os.getenv('VALIDATE_LINKS'):
+            log.warning("Link validation skipped ('VALIDATE_LINKS' unset)")
+            return True
         if self.link:
             flag = Path(self.dirpath, self.VALID_LINK_FLAG)
             if flag.is_file():
@@ -207,8 +193,9 @@ class Template:
                     self._error("link is invalid (%s)", response.status_code)
                     return False
                 else:
-                    with open(str(flag), 'w') as stream:
-                        stream.write(str(int(time.time())))
+                    with open(str(flag), 'w') as f:
+                        f.write(str(int(time.time())))
+                time.sleep(delay)
         return True
 
     def validate_size(self):
@@ -218,16 +205,6 @@ class Template:
             log.error("Image must be at least %ix%i (is %ix%i)",
                       self.MIN_WIDTH, self.MIN_HEIGHT, w, h)
             return False
-        return True
-
-    def validate_regexes(self):
-        if not self.regexes:
-            self._warn("has no regexes")
-        for regex in self.regexes:
-            pattern = regex.pattern
-            if ")/?(" not in pattern:
-                self._error("regex missing separator: %r", pattern)
-                return False
         return True
 
     def _warn(self, fmt, *objects):
@@ -240,29 +217,31 @@ class Template:
 class Placeholder:
     """Default image for missing templates."""
 
+    FALLBACK_PATH = str(Path(__file__)
+                        .parents[1]
+                        .joinpath('static', 'images', 'missing.png'))
+
     path = None
 
     def __init__(self, key):
         self.key = key
 
-    @staticmethod
-    def get_path(*styles):
+    @classmethod
+    def get_path(cls, url=None, download=True):
         path = None
 
-        for style in styles:
-            path = download_image(style)
-            if path:
-                break
+        if url and download:
+            path = download_image(url)
 
-        if not path:
-            path = os.path.dirname(__file__) + "/../static/images/missing.png"
+        if path is None:
+            path = cls.FALLBACK_PATH
 
         return path
 
 
 def download_image(url):
-    if not url or not url.startswith("http"):
-        return None
+    if not url or '://' not in url:
+        raise ValueError(f"Not a URL: {url!r}")
 
     path = Path(tempfile.gettempdir(),
                 hashlib.md5(url.encode('utf-8')).hexdigest())
@@ -272,11 +251,11 @@ def download_image(url):
         return path
 
     try:
-        response = requests.get(url, stream=True)
-    except requests.exceptions.InvalidURL:
+        response = requests.get(url, stream=True, timeout=5)
+    except ValueError:
         log.error("Invalid link: %s", url)
         return None
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.RequestException:
         log.error("Bad connection: %s", url)
         return None
 

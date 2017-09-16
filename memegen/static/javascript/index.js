@@ -13,18 +13,19 @@ function generateMeme() {
   var key = $('.js-meme-selector').val();
   var top = $('#meme-line-1').val();
   var bottom = $('#meme-line-2').val();
+  var masked = $('#meme-masked-checkbox').prop('checked');
 
   var url = "/api/templates/" + key;
-  var data = {"top": top, "bottom": bottom, "redirect": false};
+  var data = {"top": top, "bottom": bottom, "redirect": false, "masked" : masked};
 
   $.post(url, data, function(data){
-    $("#meme-image img").attr('src', data.href);
+    $("#meme-image img").attr('src', data.href + '?watermark=none');
     $("#meme-image").attr('href', data.href);
   });
 }
 
 function getShareLink() {
-  return $("#meme-image").attr('href') + "?share=true";
+  return $("#meme-image").attr('href') + "?watermark=none&share=true";
 }
 
 /*** Events ***/

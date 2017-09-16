@@ -1,5 +1,21 @@
 # Revision History
 
+## 5.2
+
+- Changed `/api` to redirect to `/api/`.
+
+## 5.1
+
+- Added `?watermark=<str>` option to include name of supported clients.
+
+## 5.0
+
+- Removed `/api/magic` route.
+
+## 4.6
+
+- Switch to underscores as the default space character.
+
 ## 4.5
 
 - Added `?share=true` to force clients to receive HTML on image URLs.
