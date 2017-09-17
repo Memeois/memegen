@@ -6,7 +6,6 @@ __pycache__
 
 # Temporary OS files
 Icon*
-
 # Temporary virtual environment files
 /.cache/
 /.venv/
@@ -49,3 +48,6 @@ Icon*
 
 # Eclipse
 .settings
+
+
+.DS_Store

@@ -4,10 +4,10 @@
 
 ### Requirements
 
-* Python 3.6+
+* Python 3.5+
     * Windows: https://www.python.org/downloads
     * macOS: `$ brew install python3`
-    * Linux: `python3.6` and `python3.6-dev` packages
+    * Linux: `python3.5` and `python3.5-dev` packages
 * pipenv: http://docs.pipenv.org
 * Make:
     * Windows: http://mingw.org/download/installer
